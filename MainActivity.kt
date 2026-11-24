@@ -73,15 +73,22 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
 
-        // Compact floating-status capsule inspired by Dynamic Island (inside the app UI).
+        // Top bar: settings shortcut at the upper-right, with the status capsule centered.
         val island = TextView(this).apply {
-            text = "●  J.A.R.V.I.S  •  SYSTEM ONLINE"
-            textSize = 11f; letterSpacing = .12f; gravity = Gravity.CENTER
-            setTextColor(cyan); setPadding(18, 10, 18, 10)
+            text = "●  J.A.R.V.I.S  •  سامانه فعال"
+            textSize = 11f; letterSpacing = .08f; gravity = Gravity.CENTER
+            setTextColor(cyan); setPadding(14, 10, 14, 10)
             background = roundedDrawable(Color.rgb(10, 29, 47), 40, Color.rgb(20, 95, 125))
         }
-        val islandRow = LinearLayout(this).apply { gravity = Gravity.CENTER; addView(island) }
-        root.addView(islandRow, LinearLayout.LayoutParams(-1, -2))
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        topBar.addView(neonButton("⚙ تنظیمات") { showJarvisSettings() }, LinearLayout.LayoutParams(-2, -2))
+        topBar.addView(island, LinearLayout.LayoutParams(0, -2, 1f).apply {
+            marginStart = dp(8); marginEnd = dp(8)
+        })
+        root.addView(topBar, LinearLayout.LayoutParams(-1, -2))
 
         val header = TextView(this).apply {
             text = "J.A.R.V.I.S"
@@ -90,7 +97,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         root.addView(header)
         val sub = TextView(this).apply {
-            text = "PERSONAL INTELLIGENCE SYSTEM"
+            text = "دستیار هوشمند شخصی"
             textSize = 10f; letterSpacing = .22f; setTextColor(Color.rgb(103, 159, 185)); gravity = Gravity.CENTER
             setPadding(0, 2, 0, 8)
         }
@@ -106,25 +113,25 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         root.addView(status)
 
         val scroll = ScrollView(this).apply { isFillViewport = false; clipToPadding = false }
-        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(sectionLabel("VOICE CONTROL"))
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        content.addView(sectionLabel("کنترل صوتی"))
         val voiceCard = card(panel)
         val voiceRow = horizontalRow()
         voiceRow.addView(neonButton("🎙  صحبت کن") { beginListening() }, weightParams())
-        voiceRow.addView(neonButton(if (isWakeServiceRunning()) "■  توقف بیدارباش" else "◉  بیدارباش") { toggleWakeMode(); island.text = if (isWakeServiceRunning()) "●  LISTENING SERVICE ACTIVE" else "●  J.A.R.V.I.S  •  SYSTEM ONLINE" }, weightParams())
+        voiceRow.addView(neonButton(if (isWakeServiceRunning()) "■  توقف بیدارباش" else "◉  بیدارباش") { toggleWakeMode(); island.text = if (isWakeServiceRunning()) "●  سرویس گوش‌به‌زنگ فعال است" else "●  J.A.R.V.I.S  •  سامانه فعال" }, weightParams())
         voiceCard.addView(voiceRow); content.addView(voiceCard)
 
-        content.addView(sectionLabel("QUICK CONTROLS"))
+        content.addView(sectionLabel("دسترسی سریع"))
         val quick = card(panel)
         addQuickRow(quick, listOf("برنامه‌ها" to { showApps() }, "چراغ‌قوه" to { toggleTorch() }, "وای‌فای" to { openWifi() }))
         addQuickRow(quick, listOf("بلوتوث" to { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }, "صدا" to { volumeDialog() }, "روشنایی" to { brightnessDialog() }))
         addQuickRow(quick, listOf("مزاحم نشو" to { openDnd() }, "مجوزها" to { showPermissionCenter() }, "باتری" to { openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }))
         content.addView(quick)
 
-        content.addView(sectionLabel("INTELLIGENCE"))
+        content.addView(sectionLabel("هوش مصنوعی"))
         val aiCard = card(panel)
         val aiTitle = TextView(this).apply {
-            text = if (aiEnabled()) "AI MODE  •  ON" else "AI MODE  •  OFF"
+            text = if (aiEnabled()) "حالت هوش مصنوعی • روشن" else "حالت هوش مصنوعی • خاموش"
             textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(if (aiEnabled()) cyan else Color.LTGRAY)
             setPadding(14, 12, 14, 4)
         }
@@ -134,12 +141,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             textSize = 12f; setTextColor(Color.rgb(160, 181, 198)); setPadding(14, 2, 14, 10)
         }
         aiCard.addView(aiDesc)
-        val aiRow = horizontalRow()
-        aiRow.addView(neonButton("تنظیم حالت AI") { showAiModeSettings(); aiTitle.text = if (aiEnabled()) "AI MODE  •  ON" else "AI MODE  •  OFF" }, weightParams())
-        aiRow.addView(neonButton("تنظیم API") { aiSettings() }, weightParams())
-        aiCard.addView(aiRow); content.addView(aiCard)
+        val aiHint = TextView(this).apply {
+            text = "برای مدیریت حالت هوش مصنوعی و سرویس اتصال، از دکمه ⚙ تنظیمات بالای صفحه استفاده کن."
+            textSize = 12f; setTextColor(Color.rgb(160, 181, 198)); setPadding(14, 5, 14, 10)
+        }
+        aiCard.addView(aiHint); content.addView(aiCard)
 
-        content.addView(sectionLabel("CONVERSATION"))
+        content.addView(sectionLabel("گفتگو"))
         log = TextView(this).apply {
             text = "سلام! من JARVIS هستم.\nفرمان‌های محاوره‌ای مثل «تلگرامو بیار بالا»، «صداشو بیشتر کن» و «چراغو روشن کن» را امتحان کن."
             textSize = 14f; setTextColor(Color.rgb(220, 234, 244)); setPadding(14, 14, 14, 14)
@@ -167,6 +175,54 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setContentView(root)
     }
 
+    private fun showJarvisSettings() {
+        val panel = Color.rgb(12, 23, 39)
+        val cyan = Color.rgb(52, 220, 238)
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+        }
+        fun heading(label: String) {
+            body.addView(TextView(this).apply {
+                text = label; textSize = 12f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(cyan); setPadding(dp(4), dp(12), dp(4), dp(5))
+            })
+        }
+        fun option(label: String, detail: String, action: () -> Unit) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(9), dp(12), dp(9))
+                background = roundedDrawable(panel, 14, Color.rgb(23, 69, 94))
+                isClickable = true; isFocusable = true; setOnClickListener { action() }
+            }
+            item.addView(TextView(this).apply { text = label; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+            item.addView(TextView(this).apply { text = detail; textSize = 11f; setTextColor(Color.rgb(155, 180, 198)); setPadding(0, dp(3), 0, 0) })
+            body.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+        }
+        heading("هوش مصنوعی")
+        option("حالت هوش مصنوعی", if (aiEnabled()) "وضعیت فعلی: روشن" else "وضعیت فعلی: خاموش") {
+            showAiModeSettings()
+        }
+        option("تنظیم سرویس و API", "مدیریت سرویس گفت‌وگوی هوشمند") { aiSettings() }
+        heading("صدا و بیدارباش")
+        option("انتخاب صدای دستیار", "تنظیم صدای پاسخ‌گویی") { showVoicePicker() }
+        option(if (isWakeServiceRunning()) "توقف بیدارباش صوتی" else "فعال‌سازی بیدارباش صوتی", "فعال‌سازی فرمان «سلام هوش»") { toggleWakeMode() }
+        heading("دسترسی‌ها و حریم خصوصی")
+        option("مدیریت مجوزها", "میکروفون و دسترسی‌های موردنیاز") { showPermissionCenter() }
+        option("تنظیمات برنامه در اندروید", "اطلاعات برنامه و مجوزهای سیستمی") { openAppDetails() }
+        heading("تنظیمات دستگاه")
+        option("اتصال‌ها", "وای‌فای و بلوتوث") { openWifi() }
+        option("صدا و مزاحم نشو", "تنظیم بلندی صدا و حالت مزاحم نشو") { openSettings(Settings.ACTION_SOUND_SETTINGS) }
+        option("باتری", "مدیریت مصرف باتری") { openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }
+
+        val scroll = ScrollView(this).apply { addView(body) }
+        AlertDialog.Builder(this)
+            .setTitle("⚙ تنظیمات J.A.R.V.I.S")
+            .setView(scroll)
+            .setPositiveButton("بستن", null)
+            .show()
+    }
+
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun roundedDrawable(color: Int, radius: Int, stroke: Int): android.graphics.drawable.GradientDrawable =
         android.graphics.drawable.GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); setStroke(dp(1), stroke) }
@@ -177,11 +233,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
     private fun horizontalRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun sectionLabel(label: String) = TextView(this).apply {
-        text = label; textSize = 10f; letterSpacing = .18f; typeface = Typeface.DEFAULT_BOLD
+        text = label; textSize = 12f; letterSpacing = .02f; typeface = Typeface.DEFAULT_BOLD; textDirection = View.TEXT_DIRECTION_RTL; gravity = Gravity.RIGHT
         setTextColor(Color.rgb(75, 184, 211)); setPadding(5, dp(13), 5, dp(7))
     }
     private fun neonButton(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label; textSize = 12f; isAllCaps = false; setTextColor(Color.rgb(207, 245, 255))
+        text = label; textSize = 12f; isAllCaps = false; setTextColor(Color.rgb(207, 245, 255)); textDirection = View.TEXT_DIRECTION_RTL
         background = roundedDrawable(Color.rgb(13, 42, 62), 14, Color.rgb(30, 135, 165))
         setPadding(dp(7), dp(8), dp(7), dp(8)); minHeight = dp(46); stateListAnimator = null
         setOnClickListener { action() }
@@ -432,7 +488,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setPositiveButton(if (enabled) "خاموش‌کردن AI" else "روشن‌کردن AI") { _, _ ->
                 prefs.edit().putBoolean("ai_enabled", !enabled).apply()
                 reply(if (!enabled) "هوش مصنوعی روشن شد؛ اگر API تنظیم نشده باشد، پاسخ آنلاین در دسترس نیست" else "هوش مصنوعی خاموش شد؛ فرمان‌های پایه فعال هستند")
-            }.setNeutralButton("تنظیم API") { _, _ -> aiSettings() }
+            }.setNeutralButton("تنظیم سرویس هوش مصنوعی") { _, _ -> aiSettings() }
             .setNegativeButton("بستن", null).show()
     }
 
@@ -609,51 +665,63 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun aiSettings() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 4) }
-        val endpoint = EditText(this).apply { hint = "نشانی API؛ نمونه: https://api.openai.com/v1/chat/completions"; setText(prefs.getString("endpoint", "https://api.openai.com/v1/chat/completions")); textSize = 13f }
-        val model = EditText(this).apply { hint = "نام مدل؛ نمونه: gpt-4o-mini"; setText(prefs.getString("model", "gpt-4o-mini")) }
-        val key = EditText(this).apply { hint = "کلید API (محرمانه)"; setText(prefs.getString("key", "")); inputType = 129 }
-        box.addView(endpoint); box.addView(model); box.addView(key)
-        AlertDialog.Builder(this).setTitle("اتصال هوش ابری")
-            .setMessage("برای فعال‌شدن مغز هوشمند آنلاین، نشانی HTTPS سرویس سازگار، نام مدل و کلید API معتبر لازم است. هیچ کلیدی داخل برنامه قرار داده نشده است. کلید را محرمانه نگه دار.")
+        val model = EditText(this).apply {
+            hint = "مدل Gemini؛ پیش‌فرض gemini-2.5-flash"
+            setText(prefs.getString("model", "gemini-2.5-flash")); textSize = 14f
+        }
+        val key = EditText(this).apply {
+            hint = "کلید API جمنای (محرمانه)"
+            setText(prefs.getString("key", "")); inputType = 129
+        }
+        box.addView(model); box.addView(key)
+        AlertDialog.Builder(this).setTitle("اتصال رایگان Gemini")
+            .setMessage("موتور گفت‌وگوی JARVIS با Gemini API گوگل کار می‌کند. در Google AI Studio کلید API بساز و اینجا وارد کن. استفاده رایگان در صورت فعال بودن سهمیه حساب ممکن است؛ محدودیت‌ها و هزینه‌های احتمالی تابع شرایط گوگل است. کلید را با کسی به اشتراک نگذار.")
             .setView(box).setPositiveButton("ذخیره") { _, _ ->
-                prefs.edit().putString("endpoint", endpoint.text.toString().trim()).putString("model", model.text.toString().trim()).putString("key", key.text.toString().trim()).apply()
-                reply("تنظیمات اتصال ذخیره شد. برای آزمایش، یک پیام بفرست.")
+                prefs.edit().putString("provider", "gemini").putString("model", model.text.toString().trim().ifBlank { "gemini-2.5-flash" }).putString("key", key.text.toString().trim()).apply()
+                reply("تنظیمات Gemini ذخیره شد. حالا می‌توانی پیام بدهی.")
             }.setNegativeButton("لغو", null).show()
     }
 
     private fun askCloud(prompt: String) {
-        val endpoint = prefs.getString("endpoint", "").orEmpty()
         val key = prefs.getString("key", "").orEmpty()
-        val model = prefs.getString("model", "gpt-4o-mini").orEmpty()
-        if (endpoint.isBlank() || key.isBlank() || model.isBlank()) {
-            reply("مغز هوشمند هنوز پیکربندی نشده است. در «تنظیم هوش» نشانی سرویس، مدل و کلید API معتبر را وارد کن.")
-            return
-        }
-        if (!endpoint.startsWith("https://", ignoreCase = true)) {
-            reply("برای محافظت از کلید API، فقط نشانی امن HTTPS پذیرفته می‌شود.")
+        val model = prefs.getString("model", "gemini-2.5-flash").orEmpty().ifBlank { "gemini-2.5-flash" }
+        if (key.isBlank()) {
+            reply("برای اتصال Gemini، در تنظیمات هوش کلید API جمنای را وارد کن. کلید را از aistudio.google.com بگیر.")
             return
         }
         status.text = "در حال دریافت پاسخ از هوش ابری…"
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"; connectTimeout = 20000; readTimeout = 45000
+                val safeModel = model.replace(Regex("[^A-Za-z0-9._-]"), "")
+                if (safeModel.isBlank()) throw Exception("نام مدل Gemini معتبر نیست")
+                val geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$safeModel:generateContent?key=${Uri.encode(key)}"
+                connection = (URL(geminiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 20000; readTimeout = 60000
                     doOutput = true; setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("Authorization", "Bearer $key")
                 }
-                val messages = JSONArray().put(
-                    JSONObject().put("role", "system").put("content", "تو مغز هوشمند JARVIS هستی؛ دستیار فارسی‌زبان، دقیق و مسئولیت‌پذیر. زمینه پیام‌های قبلی را در نظر بگیر. اگر کاربر فقط سؤال دارد، پاسخ عادی فارسی بده. اگر درخواست او یکی از فرمان‌های محلی پشتیبانی‌شده است، فقط یک JSON بدون markdown با قالب {\"type\":\"action\",\"command\":\"فرمان فارسی کوتاه\"} برگردان. فرمان‌های مجاز: باز کردن برنامه با عبارت «[نام برنامه] را باز کن»، باز کردن وای‌فای، باز کردن تنظیمات بلوتوث، باز کردن تنظیمات عمومی یا باتری، تنظیم صدا با درصد، تنظیم روشنایی با درصد، روشن/خاموش کردن چراغ‌قوه، باز کردن پنل مزاحم نشو، نمایش برنامه‌ها. هیچ فرمان دیگری پیشنهاد نده. هرگز ادعا نکن کاری انجام شده است. برنامه پیش از اجرای فرمان از کاربر تأیید می‌گیرد. رمز، کد تأیید یا کلید API درخواست نکن.")
-                )
-                for (i in 0 until conversation.length()) messages.put(conversation.getJSONObject(i))
-                messages.put(JSONObject().put("role", "user").put("content", prompt))
-                val body = JSONObject().put("model", model).put("messages", messages).put("temperature", 0.6)
+                val instruction = "تو JARVIS هستی؛ دستیار فارسی‌زبان، صمیمی، دقیق و مسئولیت‌پذیر. طبیعی و مانند یک دستیار گفت‌وگومحور صحبت کن و همیشه فارسی پاسخ بده مگر کاربر زبان دیگری بخواهد. زمینه پیام‌های قبلی را در نظر بگیر. اگر کاربر درخواست اجرای یکی از فرمان‌های محلی پشتیبانی‌شده را دارد، فقط JSON بدون markdown با قالب {\"type\":\"action\",\"command\":\"فرمان فارسی کوتاه\"} برگردان. فرمان‌های مجاز: باز کردن برنامه با عبارت «[نام برنامه] را باز کن»، باز کردن وای‌فای، باز کردن تنظیمات بلوتوث، باز کردن تنظیمات عمومی یا باتری، تنظیم صدا با درصد، تنظیم روشنایی با درصد، روشن/خاموش کردن چراغ‌قوه، باز کردن پنل مزاحم نشو، نمایش برنامه‌ها. هیچ فرمان دیگری پیشنهاد نده. هرگز ادعا نکن کاری انجام شده است. برنامه پیش از اجرای فرمان از کاربر تأیید می‌گیرد. رمز، کد تأیید یا کلید API درخواست نکن."
+                val contents = JSONArray()
+                for (i in 0 until conversation.length()) {
+                    val item = conversation.getJSONObject(i)
+                    val role = if (item.optString("role") == "assistant") "model" else "user"
+                    contents.put(JSONObject().put("role", role).put("parts", JSONArray().put(JSONObject().put("text", item.optString("content")))))
+                }
+                contents.put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt))))
+                val body = JSONObject()
+                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instruction))))
+                    .put("contents", contents)
+                    .put("generationConfig", JSONObject().put("temperature", 0.65).put("maxOutputTokens", 1200))
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
                 if (code !in 200..299) throw Exception("خطای سرویس ($code): ${response.take(500)}")
-                val answer = JSONObject(response).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+                val result = JSONObject(response)
+                val candidate = result.getJSONArray("candidates").getJSONObject(0)
+                val parts = candidate.getJSONObject("content").getJSONArray("parts")
+                val answer = (0 until parts.length()).mapNotNull { idx -> parts.getJSONObject(idx).optString("text").takeIf { it.isNotBlank() } }.joinToString("\n").trim()
+                if (answer.isBlank()) throw Exception("Gemini پاسخ متنی برنگرداند")
                 runOnUiThread {
                     addLog("شما", prompt)
                     addConversationMessage("user", prompt)

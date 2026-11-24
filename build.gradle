@@ -11,10 +11,11 @@ android {
         applicationId 'com.chtai.assistant'
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName '1.0.3'
+        versionCode 13
+        versionName '1.0.5'
     }
 
+    // Ensure Java and Kotlin compile to the same JVM bytecode level.
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -23,11 +24,6 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-}
-
-// Pin the Kotlin compiler toolchain to the same JDK as the Android build.
-kotlin {
-    jvmToolchain(17)
 }
 
 tasks.withType(JavaCompile).configureEach {
