@@ -8,6 +8,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.provider.MediaStore
+import android.content.ContentUris
+import android.view.WindowManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -48,6 +52,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var permissionStatusView: TextView? = null
     private var torchOn = false
     private var dndOn = false
+    private var localPlayer: MediaPlayer? = null
+    private var musicQueue: List<Pair<String, String>> = emptyList()
+    private var musicIndex = 0
     // Keep a short, user-visible conversation context so the AI can follow follow-up questions.
     private val conversation = JSONArray()
     private val maxHistoryMessages = 12
@@ -121,13 +128,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         voiceRow.addView(neonButton(if (isWakeServiceRunning()) "■  توقف بیدارباش" else "◉  بیدارباش") { toggleWakeMode(); island.text = if (isWakeServiceRunning()) "●  سرویس گوش‌به‌زنگ فعال است" else "●  J.A.R.V.I.S  •  سامانه فعال" }, weightParams())
         voiceCard.addView(voiceRow); content.addView(voiceCard)
 
-        content.addView(sectionLabel("دسترسی سریع"))
-        val quick = card(panel)
-        addQuickRow(quick, listOf("برنامه‌ها" to { showApps() }, "چراغ‌قوه" to { toggleTorch() }, "وای‌فای" to { openWifi() }))
-        addQuickRow(quick, listOf("بلوتوث" to { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }, "صدا" to { volumeDialog() }, "روشنایی" to { brightnessDialog() }))
-        addQuickRow(quick, listOf("مزاحم نشو" to { openDnd() }, "مجوزها" to { showPermissionCenter() }, "باتری" to { openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }))
-        content.addView(quick)
-
         content.addView(sectionLabel("هوش مصنوعی"))
         val aiCard = card(panel)
         val aiTitle = TextView(this).apply {
@@ -199,14 +199,20 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             item.addView(TextView(this).apply { text = detail; textSize = 11f; setTextColor(Color.rgb(155, 180, 198)); setPadding(0, dp(3), 0, 0) })
             body.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
         }
+        heading("فرمان‌های شخصی")
+        option("مدیریت فرمان‌ها", "افزودن، ویرایش و حذف فرمان‌های دلخواه") { showCustomCommands() }
         heading("هوش مصنوعی")
         option("حالت هوش مصنوعی", if (aiEnabled()) "وضعیت فعلی: روشن" else "وضعیت فعلی: خاموش") {
             showAiModeSettings()
         }
         option("تنظیم سرویس و API", "مدیریت سرویس گفت‌وگوی هوشمند") { aiSettings() }
         heading("صدا و بیدارباش")
-        option("انتخاب صدای دستیار", "تنظیم صدای پاسخ‌گویی") { showVoicePicker() }
+        option("انتخاب صدای دستیار", "تنظیم صدای پاسخ‌گویی فارسی") { showVoicePicker() }
+        option("جزیره شناور", "فعال‌سازی نمایش روی سایر برنامه‌ها") { enableFloatingIsland() }
         option(if (isWakeServiceRunning()) "توقف بیدارباش صوتی" else "فعال‌سازی بیدارباش صوتی", "فعال‌سازی فرمان «سلام هوش»") { toggleWakeMode() }
+        heading("جزیره شناور و جست‌وجو")
+        option("فعال‌سازی جزیره شناور روی همه برنامه‌ها", "نمایش پنل کوچک JARVIS روی برنامه‌های دیگر") { enableFloatingIsland() }
+        option("جست‌وجوی اینترنت", "موتور جست‌وجو: DuckDuckGo؛ از داخل جزیره شناور") { openDuckSearch() }
         heading("دسترسی‌ها و حریم خصوصی")
         option("مدیریت مجوزها", "میکروفون و دسترسی‌های موردنیاز") { showPermissionCenter() }
         option("تنظیمات برنامه در اندروید", "اطلاعات برنامه و مجوزهای سیستمی") { openAppDetails() }
@@ -221,6 +227,139 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setView(scroll)
             .setPositiveButton("بستن", null)
             .show()
+    }
+
+    private fun loadCustomCommands(): JSONArray {
+        return try { JSONArray(prefs.getString("custom_commands", "[]") ?: "[]") }
+        catch (_: Exception) { JSONArray() }
+    }
+
+    private fun saveCustomCommands(commands: JSONArray) {
+        prefs.edit().putString("custom_commands", commands.toString()).apply()
+    }
+
+    private fun showCustomCommands() {
+        val commands = loadCustomCommands()
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+        }
+        val scroll = ScrollView(this)
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        if (commands.length() == 0) {
+            content.addView(TextView(this).apply {
+                text = "هنوز فرمان شخصی نساخته‌ای. با افزودن فرمان، یک عبارت دلخواه را به یکی از فرمان‌های قابل‌اجرای JARVIS وصل کن."
+                textSize = 13f; setTextColor(Color.LTGRAY); setPadding(dp(8), dp(12), dp(8), dp(12))
+            })
+        }
+        for (i in 0 until commands.length()) {
+            val item = commands.optJSONObject(i) ?: continue
+            val phrase = item.optString("phrase")
+            val action = item.optString("action")
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                background = roundedDrawable(Color.rgb(12, 23, 39), 14, Color.rgb(23, 69, 94))
+            }
+            card.addView(TextView(this).apply {
+                text = "وقتی بگویم: «$phrase»"
+                textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE)
+            })
+            card.addView(TextView(this).apply {
+                text = "انجام بده: $action"
+                textSize = 12f; setTextColor(Color.rgb(155, 180, 198)); setPadding(0, dp(4), 0, dp(8))
+            })
+            val row = horizontalRow()
+            row.addView(neonButton("ویرایش") { showCustomCommandEditor(i) }, weightParams())
+            row.addView(neonButton("حذف") { confirmDeleteCustomCommand(i, phrase) }, weightParams())
+            card.addView(row)
+            content.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+        scroll.addView(content)
+        body.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        AlertDialog.Builder(this)
+            .setTitle("فرمان‌های شخصی JARVIS")
+            .setView(body)
+            .setPositiveButton("＋ افزودن فرمان") { _, _ -> showCustomCommandEditor(-1) }
+            .setNegativeButton("بستن", null)
+            .show()
+    }
+
+    private fun showCustomCommandEditor(index: Int) {
+        val commands = loadCustomCommands()
+        val old = if (index in 0 until commands.length()) commands.optJSONObject(index) else null
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        val phrase = EditText(this).apply {
+            hint = "مثلاً: برو سراغ کار"
+            setText(old?.optString("phrase") ?: "")
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+        }
+        val action = EditText(this).apply {
+            hint = "فرمان اجرایی؛ مثلاً: تلگرام را باز کن"
+            setText(old?.optString("action") ?: "")
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+        }
+        val response = EditText(this).apply {
+            hint = "پاسخ اختیاری JARVIS قبل از اجرا"
+            setText(old?.optString("response") ?: "")
+            setTextColor(Color.WHITE); setHintTextColor(Color.GRAY)
+        }
+        form.addView(TextView(this).apply { text = "عبارتی که به JARVIS می‌گویی"; setTextColor(Color.LTGRAY); textSize = 12f })
+        form.addView(phrase)
+        form.addView(TextView(this).apply { text = "کاری که باید انجام دهد"; setTextColor(Color.LTGRAY); textSize = 12f; setPadding(0, dp(10), 0, 0) })
+        form.addView(action)
+        form.addView(TextView(this).apply { text = "پاسخ صوتی دلخواه (اختیاری)"; setTextColor(Color.LTGRAY); textSize = 12f; setPadding(0, dp(10), 0, 0) })
+        form.addView(response)
+        AlertDialog.Builder(this)
+            .setTitle(if (old == null) "افزودن فرمان" else "ویرایش فرمان")
+            .setView(form)
+            .setPositiveButton("ذخیره", null)
+            .setNegativeButton("انصراف", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val p = phrase.text.toString().trim()
+                        val a = action.text.toString().trim()
+                        if (p.isBlank() || a.isBlank()) {
+                            Toast.makeText(this, "عبارت و فرمان اجرایی را وارد کن", Toast.LENGTH_SHORT).show(); return@setOnClickListener
+                        }
+                        if (normalize(p) == normalize(a)) {
+                            Toast.makeText(this, "عبارت فعال‌سازی نباید با فرمان اجرایی یکسان باشد", Toast.LENGTH_LONG).show(); return@setOnClickListener
+                        }
+                        val current = loadCustomCommands()
+                        for (j in 0 until current.length()) {
+                            if (j != index && normalize(current.optJSONObject(j)?.optString("phrase") ?: "") == normalize(p)) {
+                                Toast.makeText(this, "این عبارت قبلاً ثبت شده است", Toast.LENGTH_SHORT).show(); return@setOnClickListener
+                            }
+                        }
+                        val entry = JSONObject().put("phrase", p).put("action", a).put("response", response.text.toString().trim())
+                        if (index in 0 until current.length()) current.put(index, entry) else current.put(entry)
+                        saveCustomCommands(current)
+                        dialog.dismiss()
+                        showCustomCommands()
+                        Toast.makeText(this, "فرمان ذخیره شد", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun confirmDeleteCustomCommand(index: Int, phrase: String) {
+        AlertDialog.Builder(this).setTitle("حذف فرمان")
+            .setMessage("فرمان «$phrase» حذف شود؟")
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("حذف") { _, _ ->
+                val old = loadCustomCommands()
+                val updated = JSONArray()
+                for (i in 0 until old.length()) if (i != index) old.optJSONObject(i)?.let { updated.put(it) }
+                saveCustomCommands(updated)
+                showCustomCommands()
+                Toast.makeText(this, "فرمان حذف شد", Toast.LENGTH_SHORT).show()
+            }.show()
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -494,6 +633,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun handleCommand(raw: String) {
         val q = normalize(raw)
+        val custom = loadCustomCommands().firstOrNull { normalize(it.optString("phrase")) == q }
+        if (custom != null) {
+            val action = custom.optString("action").trim()
+            if (action.isNotBlank() && normalize(action) != q) {
+                reply(custom.optString("response").ifBlank { "فرمان شخصی اجرا می‌شود" })
+                handleCommand(action)
+            } else reply("فرمان شخصی معتبر نیست؛ از تنظیمات آن را ویرایش کن")
+            return
+        }
         // Conversational acknowledgements are only meaningful when a pending action exists;
         // never treat an isolated "OK" as authorization for an unrelated action.
         when {
@@ -502,6 +650,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             q in listOf("اوکی", "باشه", "آره", "اره", "بله", "yes") -> reply("متوجه شدم؛ چه کاری انجام بدهم؟")
             q in listOf("نه", "بی خیال", "بیخیال", "لغو کن", "کنسل", "cancel") -> reply("چیزی در انتظار تأیید نیست؛ فرمانی اجرا نشد")
             q.contains("هوش مصنوعی") || q.contains("حالت ai") || q.contains("تنظیم هوش") -> showAiModeSettings()
+            q.contains("جستجو") || q.contains("جست وجو") || q.contains("بگرد") -> openDuckSearch(raw)
+            q.contains("آهنگ") || q.contains("موسیقی") || q.contains("پخش کن") && q.contains("خواننده") -> handleMusicCommand(q)
             q.contains("وای فای") || q.contains("wifi") -> { reply("پنل وای‌فای را باز می‌کنم؛ تغییر اتصال را از همان‌جا انجام بده"); openWifi() }
             q.contains("بلوتوث") -> { reply("تنظیمات بلوتوث را باز می‌کنم"); openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }
             q.contains("چراغ") || q.contains("فلش") -> {
@@ -535,6 +685,74 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             aiEnabled() -> askCloud(raw)
             else -> reply("این فرمان در حالت پایه پشتیبانی نمی‌شود. برای گفت‌وگوی آزاد، AI را از تنظیمات روشن و سرویس API را پیکربندی کن.")
         }
+    }
+
+    private fun enableFloatingIsland() {
+        if (!Settings.canDrawOverlays(this)) {
+            AlertDialog.Builder(this).setTitle("مجوز جزیره شناور")
+                .setMessage("برای نمایش جزیره JARVIS روی همه برنامه‌ها، مجوز نمایش روی سایر برنامه‌ها را فعال کن.")
+                .setPositiveButton("رفتن به تنظیمات") { _, _ ->
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                }.setNegativeButton("بعداً", null).show()
+        } else {
+            ContextCompat.startForegroundService(this, Intent(this, FloatingIslandService::class.java))
+            reply("جزیره شناور فعال شد")
+        }
+    }
+
+    private fun openDuckSearch(query: String = "") {
+        val q = query.replace(Regex("(جارویس|جستجو|جست وجو|بگرد)"), "").trim()
+        val url = "https://duckduckgo.com/?q=${Uri.encode(q)}"
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        catch (_: Exception) { reply("باز کردن جست‌وجو ممکن نشد") }
+    }
+
+    private fun hasMusicPermission(): Boolean {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_AUDIO" else Manifest.permission.READ_EXTERNAL_STORAGE
+        return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun handleMusicCommand(q: String) {
+        if (q.contains("توقف") || q.contains("قطع") || q.contains("استپ")) {
+            localPlayer?.pause(); reply("پخش موسیقی متوقف شد"); return
+        }
+        if (q.contains("بعدی")) { playQueuedTrack(musicIndex + 1); return }
+        if (q.contains("قبلی")) { playQueuedTrack(musicIndex - 1); return }
+        if (q.contains("ادامه")) { localPlayer?.start(); reply("پخش موسیقی ادامه پیدا کرد"); return }
+        if (!hasMusicPermission()) {
+            val permission = if (android.os.Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_AUDIO" else Manifest.permission.READ_EXTERNAL_STORAGE
+            ActivityCompat.requestPermissions(this, arrayOf(permission), 105)
+            reply("برای پخش آهنگ‌های گوشی، مجوز دسترسی به فایل‌های صوتی را تأیید کن")
+            return
+        }
+        val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST)
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        val found = mutableListOf<Triple<Long,String,String>>()
+        contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, projection, selection, null, "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC")?.use { c ->
+            val idCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID); val titleCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE); val artistCol=c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            while(c.moveToNext()) found.add(Triple(c.getLong(idCol),c.getString(titleCol) ?: "بدون نام",c.getString(artistCol) ?: "ناشناخته"))
+        }
+        val term = q.replace(Regex("(جارویس|آهنگ|موسیقی|بزار|بذار|پخش کن|پخش|تصادفی|یه|یک|از|خواننده)"), "").trim()
+        val filtered = if (term.isBlank() || q.contains("تصادفی")) found else found.filter { normalize(it.second).contains(term) || normalize(it.third).contains(term) }
+        if (filtered.isEmpty()) { reply(if(found.isEmpty()) "آهنگی در حافظه گوشی پیدا نکردم" else "آهنگ یا خواننده موردنظر در موسیقی‌های گوشی پیدا نشد"); return }
+        musicQueue = filtered.map { item -> item.second to ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,item.first).toString() }
+        musicIndex = if (q.contains("تصادفی")) (musicQueue.indices).random() else 0
+        playQueuedTrack(musicIndex)
+    }
+
+    private fun playQueuedTrack(index: Int) {
+        if (musicQueue.isEmpty()) { reply("ابتدا بگو آهنگ پخش کنم"); return }
+        musicIndex = Math.floorMod(index, musicQueue.size)
+        try {
+            localPlayer?.release()
+            localPlayer = MediaPlayer().apply {
+                setDataSource(this@MainActivity, Uri.parse(musicQueue[musicIndex].second))
+                setOnPreparedListener { it.start(); runOnUiThread { reply("در حال پخش: ${musicQueue[musicIndex].first}") } }
+                setOnCompletionListener { playQueuedTrack(musicIndex + 1) }
+                setOnErrorListener { _,_,_ -> reply("پخش این فایل ممکن نشد"); true }
+                prepareAsync()
+            }
+        } catch (_: Exception) { reply("دسترسی به فایل موسیقی ممکن نشد") }
     }
 
     private fun openWifi() {
@@ -795,6 +1013,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             if (android.os.Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) startWakeServiceNow()
             else reply("مجوز اعلان داده نشد؛ برای نمایش اعلان دائمی باید آن را از تنظیمات مجاز کنی")
         }
+        if (requestCode == 105) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) handleMusicCommand("آهنگ بزار")
+            else reply("بدون مجوز فایل‌های صوتی نمی‌توانم آهنگ‌های گوشی را پخش کنم")
+        }
         if (requestCode == requestCorePermissions) {
             updatePermissionStatus()
             val micGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -805,7 +1027,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onInit(code: Int) {
         if (code == TextToSpeech.SUCCESS) {
-            val result = tts.setLanguage(Locale("fa", "IR"))
+            val result = tts.setLanguage(Locale.forLanguageTag("fa-IR"))
             ttsReady = result >= TextToSpeech.LANG_AVAILABLE
             val savedVoice = prefs.getString("tts_voice", "")
             if (!savedVoice.isNullOrBlank()) tts.voices?.firstOrNull { it.name == savedVoice }?.let { tts.setVoice(it) }
@@ -815,6 +1037,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         executor.shutdownNow()
+        localPlayer?.release(); localPlayer = null
         if (::tts.isInitialized) { tts.stop(); tts.shutdown() }
         super.onDestroy()
     }
