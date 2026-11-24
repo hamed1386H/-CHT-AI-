@@ -54,76 +54,142 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = Color.rgb(5, 10, 20)
+        window.navigationBarColor = Color.rgb(5, 10, 20)
+        if (android.os.Build.VERSION.SDK_INT >= 23) window.decorView.systemUiVisibility = 0
         tts = TextToSpeech(this, this)
         restoreConversation()
         buildUi()
     }
 
     private fun buildUi() {
+        val bg = Color.rgb(5, 10, 20)
+        val panel = Color.rgb(12, 23, 39)
+        val cyan = Color.rgb(52, 220, 238)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(22, 30, 22, 18)
-            setBackgroundColor(Color.rgb(10, 15, 28))
+            setPadding(18, 18, 18, 14)
+            setBackgroundColor(bg)
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        val title = TextView(this).apply {
-            text = "CHT AI  •  دستیار هوشمند"
-            textSize = 25f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER; setPadding(0, 8, 0, 12)
+
+        // Compact floating-status capsule inspired by Dynamic Island (inside the app UI).
+        val island = TextView(this).apply {
+            text = "●  J.A.R.V.I.S  •  SYSTEM ONLINE"
+            textSize = 11f; letterSpacing = .12f; gravity = Gravity.CENTER
+            setTextColor(cyan); setPadding(18, 10, 18, 10)
+            background = roundedDrawable(Color.rgb(10, 29, 47), 40, Color.rgb(20, 95, 125))
         }
+        val islandRow = LinearLayout(this).apply { gravity = Gravity.CENTER; addView(island) }
+        root.addView(islandRow, LinearLayout.LayoutParams(-1, -2))
+
+        val header = TextView(this).apply {
+            text = "J.A.R.V.I.S"
+            textSize = 29f; letterSpacing = .20f; typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 14, 0, 0)
+        }
+        root.addView(header)
+        val sub = TextView(this).apply {
+            text = "PERSONAL INTELLIGENCE SYSTEM"
+            textSize = 10f; letterSpacing = .22f; setTextColor(Color.rgb(103, 159, 185)); gravity = Gravity.CENTER
+            setPadding(0, 2, 0, 8)
+        }
+        root.addView(sub)
+
+        val orb = JarvisOrbView(this)
+        root.addView(orb, LinearLayout.LayoutParams(-1, dp(218)))
         status = TextView(this).apply {
-            text = "آماده‌ام؛ فرمان بده"
-            textSize = 15f; setTextColor(Color.rgb(100, 225, 180)); gravity = Gravity.CENTER
-            setPadding(4, 8, 4, 12)
+            text = "آماده‌ام؛ بگو «سلام هوش» یا فرمانت را لمس کن"
+            textSize = 14f; setTextColor(cyan); gravity = Gravity.CENTER
+            setPadding(8, 7, 8, 13)
         }
-        root.addView(title); root.addView(status)
+        root.addView(status)
 
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-        actions.addView(actionButton("🎙 صحبت", "میکروفون") { beginListening() }, weightParams())
-        actions.addView(actionButton("📱 برنامه‌ها", "برنامه‌ها") { showApps() }, weightParams())
-        actions.addView(actionButton("🧠 تنظیم هوش", "هوش") { aiSettings() }, weightParams())
-        actions.addView(actionButton("🧹 پاک‌کردن گفتگو", "پاک‌کردن گفتگو") { clearConversation() }, weightParams())
-        root.addView(actions)
+        val scroll = ScrollView(this).apply { isFillViewport = false; clipToPadding = false }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(sectionLabel("VOICE CONTROL"))
+        val voiceCard = card(panel)
+        val voiceRow = horizontalRow()
+        voiceRow.addView(neonButton("🎙  صحبت کن") { beginListening() }, weightParams())
+        voiceRow.addView(neonButton(if (isWakeServiceRunning()) "■  توقف بیدارباش" else "◉  بیدارباش") { toggleWakeMode(); island.text = if (isWakeServiceRunning()) "●  LISTENING SERVICE ACTIVE" else "●  J.A.R.V.I.S  •  SYSTEM ONLINE" }, weightParams())
+        voiceCard.addView(voiceRow); content.addView(voiceCard)
 
-        val voiceRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-        voiceRow.addView(actionButton("🗣 انتخاب صدا", "انتخاب صدای دستیار") { showVoicePicker() }, weightParams())
-        voiceRow.addView(actionButton("👂 سرویس دائمی", "فعال‌سازی گوش‌به‌زنگ دائمی") { toggleWakeMode() }, weightParams())
-        root.addView(voiceRow)
+        content.addView(sectionLabel("QUICK CONTROLS"))
+        val quick = card(panel)
+        addQuickRow(quick, listOf("برنامه‌ها" to { showApps() }, "چراغ‌قوه" to { toggleTorch() }, "وای‌فای" to { openWifi() }))
+        addQuickRow(quick, listOf("بلوتوث" to { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }, "صدا" to { volumeDialog() }, "روشنایی" to { brightnessDialog() }))
+        addQuickRow(quick, listOf("مزاحم نشو" to { openDnd() }, "مجوزها" to { showPermissionCenter() }, "باتری" to { openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }))
+        content.addView(quick)
 
-        val quick1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        quick1.addView(actionButton("⚙ تنظیمات", "تنظیمات") { openSettings(Settings.ACTION_SETTINGS) }, weightParams())
-        quick1.addView(actionButton("📶 وای‌فای", "وای فای") { openWifi() }, weightParams())
-        quick1.addView(actionButton("ᛒ بلوتوث", "بلوتوث") { openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }, weightParams())
-        root.addView(quick1)
-        val quick2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        quick2.addView(actionButton("🔊 صدا", "صدا") { volumeDialog() }, weightParams())
-        quick2.addView(actionButton("☀ روشنایی", "روشنایی") { brightnessDialog() }, weightParams())
-        quick2.addView(actionButton("🔦 چراغ", "چراغ قوه") { toggleTorch() }, weightParams())
-        root.addView(quick2)
-        val quick3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        quick3.addView(actionButton("🌙 مزاحم نشو", "مزاحم نشو") { openDnd() }, weightParams())
-        quick3.addView(actionButton("♿ دسترس‌پذیری", "دسترسی") { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }, weightParams())
-        quick3.addView(actionButton("🔋 باتری", "باتری") { openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS) }, weightParams())
-        root.addView(quick3)
-        val permissionRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        permissionRow.addView(actionButton("🛡 مجوزهای گوشی", "مدیریت مجوزها") { showPermissionCenter() }, weightParams())
-        root.addView(permissionRow)
+        content.addView(sectionLabel("INTELLIGENCE"))
+        val aiCard = card(panel)
+        val aiTitle = TextView(this).apply {
+            text = if (aiEnabled()) "AI MODE  •  ON" else "AI MODE  •  OFF"
+            textSize = 15f; typeface = Typeface.DEFAULT_BOLD; setTextColor(if (aiEnabled()) cyan else Color.LTGRAY)
+            setPadding(14, 12, 14, 4)
+        }
+        aiCard.addView(aiTitle)
+        val aiDesc = TextView(this).apply {
+            text = "فرمان‌های پایه مستقل از هوش مصنوعی فعال می‌مانند. برای پاسخ هوشمند آنلاین، سرویس API را تنظیم کن."
+            textSize = 12f; setTextColor(Color.rgb(160, 181, 198)); setPadding(14, 2, 14, 10)
+        }
+        aiCard.addView(aiDesc)
+        val aiRow = horizontalRow()
+        aiRow.addView(neonButton("تنظیم حالت AI") { showAiModeSettings(); aiTitle.text = if (aiEnabled()) "AI MODE  •  ON" else "AI MODE  •  OFF" }, weightParams())
+        aiRow.addView(neonButton("تنظیم API") { aiSettings() }, weightParams())
+        aiCard.addView(aiRow); content.addView(aiCard)
 
+        content.addView(sectionLabel("CONVERSATION"))
         log = TextView(this).apply {
-            text = "سلام! من CHT AI هستم.\n\nفرمان‌های نمونه:\n• کروم را باز کن\n• وای‌فای را باز کن\n• روشنایی را ۷۰ درصد کن\n• صدا را روی ۵۰ درصد بگذار\n• چراغ‌قوه را روشن کن\n• تنظیمات باتری را باز کن\n\nبرای گفت‌وگوی هوشمند، اتصال API را در تنظیم هوش پیکربندی کن. گفت‌وگوهای اخیر برای پیگیری سؤال‌ها نگهداری می‌شوند."
-            textSize = 15f; setTextColor(Color.WHITE); setPadding(8, 18, 8, 18)
+            text = "سلام! من JARVIS هستم.\nفرمان‌های محاوره‌ای مثل «تلگرامو بیار بالا»، «صداشو بیشتر کن» و «چراغو روشن کن» را امتحان کن."
+            textSize = 14f; setTextColor(Color.rgb(220, 234, 244)); setPadding(14, 14, 14, 14)
+            background = roundedDrawable(Color.rgb(9, 19, 32), 18, Color.rgb(24, 58, 79))
         }
-        val scroll = ScrollView(this).apply { addView(log) }
+        content.addView(log, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        val toolsRow = horizontalRow()
+        toolsRow.addView(neonButton("انتخاب صدا") { showVoicePicker() }, weightParams())
+        toolsRow.addView(neonButton("پاک‌کردن گفتگو") { clearConversation() }, weightParams())
+        content.addView(toolsRow)
+        scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        input = EditText(this).apply {
-            hint = "پیامت را بنویس…"; setHintTextColor(Color.LTGRAY); setTextColor(Color.WHITE)
-            textSize = 16f; setSingleLine(true); setPadding(14, 8, 14, 8)
+        val composer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(8, 7, 8, 7); background = roundedDrawable(Color.rgb(12, 25, 40), 24, Color.rgb(27, 99, 128))
         }
-        val sendRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        sendRow.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
-        sendRow.addView(actionButton("ارسال", "ارسال") { val q = input.text.toString().trim(); if (q.isNotEmpty()) { input.setText(""); handleCommand(q) } })
-        root.addView(sendRow)
+        input = EditText(this).apply {
+            hint = "فرمانت را بنویس…"; setHintTextColor(Color.rgb(111, 144, 164)); setTextColor(Color.WHITE)
+            textSize = 14f; setSingleLine(true); background = null; setPadding(10, 8, 10, 8)
+        }
+        composer.addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+        composer.addView(neonButton("ارسال ➤") { val q = input.text.toString().trim(); if (q.isNotEmpty()) { input.setText(""); handleCommand(q) } })
+        root.addView(composer, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         setContentView(root)
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun roundedDrawable(color: Int, radius: Int, stroke: Int): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); setStroke(dp(1), stroke) }
+    private fun card(color: Int) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(dp(9), dp(8), dp(9), dp(8))
+        background = roundedDrawable(color, 20, Color.rgb(23, 69, 94))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
+    }
+    private fun horizontalRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private fun sectionLabel(label: String) = TextView(this).apply {
+        text = label; textSize = 10f; letterSpacing = .18f; typeface = Typeface.DEFAULT_BOLD
+        setTextColor(Color.rgb(75, 184, 211)); setPadding(5, dp(13), 5, dp(7))
+    }
+    private fun neonButton(label: String, action: () -> Unit): Button = Button(this).apply {
+        text = label; textSize = 12f; isAllCaps = false; setTextColor(Color.rgb(207, 245, 255))
+        background = roundedDrawable(Color.rgb(13, 42, 62), 14, Color.rgb(30, 135, 165))
+        setPadding(dp(7), dp(8), dp(7), dp(8)); minHeight = dp(46); stateListAnimator = null
+        setOnClickListener { action() }
+    }
+    private fun addQuickRow(parent: LinearLayout, items: List<Pair<String, () -> Unit>>) {
+        val row = horizontalRow()
+        items.forEach { (label, action) -> row.addView(neonButton(label, action), weightParams()) }
+        parent.addView(row)
     }
 
     private fun weightParams() = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(3, 3, 3, 3) }
@@ -142,7 +208,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setPadding(24, 8, 24, 8)
         }
         val explanation = TextView(this).apply {
-            text = "مجوزها را خود برنامه آماده می‌کند و صفحه رسمی اندروید را باز می‌کند. هیچ مجوزی مخفیانه یا خودکار تأیید نمی‌شود. پس از انتخاب «اجازه دادن» یا فعال‌سازی در تنظیمات، به CHT AI برگرد و «مجوز داده شد / بررسی دوباره» را بزن."
+            text = "مجوزها را خود برنامه آماده می‌کند و صفحه رسمی اندروید را باز می‌کند. هیچ مجوزی مخفیانه یا خودکار تأیید نمی‌شود. پس از انتخاب «اجازه دادن» یا فعال‌سازی در تنظیمات، به JARVIS برگرد و «مجوز داده شد / بررسی دوباره» را بزن."
             textSize = 14f
             setTextColor(Color.WHITE)
             setPadding(0, 0, 0, 12)
@@ -186,7 +252,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         content.addView(persistenceButton)
         updatePermissionStatus()
         AlertDialog.Builder(this)
-            .setTitle("مرکز مجوزهای CHT AI")
+            .setTitle("مرکز مجوزهای JARVIS")
             .setView(content)
             .setPositiveButton("بستن", null)
             .show()
@@ -205,7 +271,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun showBackgroundPersistenceOptions() {
         val choices = arrayOf("حذف محدودیت بهینه‌سازی باتری", "باز کردن تنظیمات شروع خودکار شیائومی", "صفحه اطلاعات برنامه")
-        AlertDialog.Builder(this).setTitle("پایداری CHT AI")
+        AlertDialog.Builder(this).setTitle("پایداری JARVIS")
             .setItems(choices) { _, which ->
                 when (which) {
                     0 -> {
@@ -301,7 +367,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun startWakeServiceNow() {
         try {
             ContextCompat.startForegroundService(this, Intent(this, WakeWordService::class.java))
-            reply("گوش‌به‌زنگ فعال شد؛ اعلان دائمی CHT AI نمایش داده می‌شود")
+            reply("گوش‌به‌زنگ فعال شد؛ اعلان دائمی JARVIS نمایش داده می‌شود")
         } catch (_: Exception) {
             reply("فعال‌سازی سرویس ممکن نشد؛ مجوز میکروفون، اعلان و محدودیت باتری را بررسی کن")
         }
@@ -323,13 +389,13 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }.toTypedArray()
         val selected = prefs.getString("tts_voice", "")
         val checked = voices.indexOfFirst { it.name == selected }.coerceAtLeast(0)
-        AlertDialog.Builder(this).setTitle("انتخاب صدای CHT AI")
+        AlertDialog.Builder(this).setTitle("انتخاب صدای JARVIS")
             .setSingleChoiceItems(labels, checked) { dialog, which ->
                 val voice = voices[which]
                 val result = tts.setVoice(voice)
                 if (result == TextToSpeech.SUCCESS) {
                     prefs.edit().putString("tts_voice", voice.name).apply()
-                    reply("صدا تغییر کرد؛ سلام، من CHT AI هستم")
+                    reply("صدا تغییر کرد؛ سلام، من JARVIS هستم")
                 } else reply("این صدا قابل فعال‌سازی نیست")
                 dialog.dismiss()
             }.setNegativeButton("بستن", null).show()
@@ -345,12 +411,42 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun normalize(s: String): String = s.lowercase(Locale("fa", "IR"))
-        .replace("ي", "ی").replace("ك", "ک").replace("‌", " ").replace("ؤ", "و").replace("۰", "0").replace("۱", "1").replace("۲", "2").replace("۳", "3").replace("۴", "4").replace("۵", "5").replace("۶", "6").replace("۷", "7").replace("۸", "8").replace("۹", "9")
+        .replace("ي", "ی").replace("ك", "ک").replace("‌", " ").replace("ؤ", "و")
+        .replace("۰", "0").replace("۱", "1").replace("۲", "2").replace("۳", "3").replace("۴", "4").replace("۵", "5").replace("۶", "6").replace("۷", "7").replace("۸", "8").replace("۹", "9")
+        .replace(Regex("[،؛؟!,.]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    private fun aiEnabled(): Boolean = prefs.getBoolean("ai_enabled", false)
+
+    private fun changeVolumeBy(delta: Int) {
+        val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+        val current = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, (current + delta).coerceIn(0, max), 0)
+        reply(if (delta > 0) "صدا بیشتر شد" else "صدا کمتر شد")
+    }
+
+    private fun showAiModeSettings() {
+        val enabled = aiEnabled()
+        AlertDialog.Builder(this).setTitle("JARVIS • تنظیم هوش مصنوعی")
+            .setMessage("وضعیت فعلی: ${if (enabled) "روشن" else "خاموش"}\n\nدر حالت خاموش، فرمان‌های محلی همچنان فعال می‌مانند. حالت روشن برای پاسخ هوشمند به اتصال API پیکربندی‌شده نیاز دارد.")
+            .setPositiveButton(if (enabled) "خاموش‌کردن AI" else "روشن‌کردن AI") { _, _ ->
+                prefs.edit().putBoolean("ai_enabled", !enabled).apply()
+                reply(if (!enabled) "هوش مصنوعی روشن شد؛ اگر API تنظیم نشده باشد، پاسخ آنلاین در دسترس نیست" else "هوش مصنوعی خاموش شد؛ فرمان‌های پایه فعال هستند")
+            }.setNeutralButton("تنظیم API") { _, _ -> aiSettings() }
+            .setNegativeButton("بستن", null).show()
+    }
 
     private fun handleCommand(raw: String) {
         val q = normalize(raw)
+        // Conversational acknowledgements are only meaningful when a pending action exists;
+        // never treat an isolated "OK" as authorization for an unrelated action.
         when {
-            q.contains("وای فای") || q.contains("wifi") -> { reply("پنل وای‌فای را باز می‌کنم؛ تغییر اتصال را از همان‌جا تأیید کن"); openWifi() }
+            q in listOf("خواب جارویس", "خواب جارويس", "برو بخواب", "فعلا بخواب") -> { stopService(Intent(this, WakeWordService::class.java)); reply("وارد حالت خواب شدم") }
+            q in listOf("سلام هوش", "بیدار شو", "بیدار") -> reply("سلام، در خدمتم")
+            q in listOf("اوکی", "باشه", "آره", "اره", "بله", "yes") -> reply("متوجه شدم؛ چه کاری انجام بدهم؟")
+            q in listOf("نه", "بی خیال", "بیخیال", "لغو کن", "کنسل", "cancel") -> reply("چیزی در انتظار تأیید نیست؛ فرمانی اجرا نشد")
+            q.contains("هوش مصنوعی") || q.contains("حالت ai") || q.contains("تنظیم هوش") -> showAiModeSettings()
+            q.contains("وای فای") || q.contains("wifi") -> { reply("پنل وای‌فای را باز می‌کنم؛ تغییر اتصال را از همان‌جا انجام بده"); openWifi() }
             q.contains("بلوتوث") -> { reply("تنظیمات بلوتوث را باز می‌کنم"); openSettings(Settings.ACTION_BLUETOOTH_SETTINGS) }
             q.contains("چراغ") || q.contains("فلش") -> {
                 if (q.contains("خاموش")) setTorch(false) else if (q.contains("روشن")) setTorch(true) else toggleTorch()
@@ -361,21 +457,27 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             }
             q.contains("صدا") || q.contains("ولوم") || q.contains("بلندی") -> {
                 val percent = Regex("(\\d{1,3})").find(q)?.value?.toIntOrNull()
-                if (percent != null) setVolume(percent.coerceIn(0, 100)) else volumeDialog()
+                when {
+                    percent != null -> setVolume(percent.coerceIn(0, 100))
+                    q.contains("بیشتر") || q.contains("زیاد") || q.contains("بالا") -> changeVolumeBy(2)
+                    q.contains("کمتر") || q.contains("کم") || q.contains("پایین") -> changeVolumeBy(-2)
+                    else -> volumeDialog()
+                }
             }
             q.contains("مزاحم نشو") || q.contains("عدم مزاحمت") -> openDnd()
             q.contains("برنامه ها") || q.contains("اپلیکیشن") || q.contains("فهرست برنامه") -> showApps()
-            q.contains("تنظیمات باتری") || q.contains("باتری") -> openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS)
+            q.contains("تنظیمات باتری") || q == "باتری" -> openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS)
             q.contains("تنظیمات") -> openSettings(Settings.ACTION_SETTINGS)
-            q.startsWith("باز کن") || q.startsWith("بازکن") -> {
-                val name = q.removePrefix("باز کن").removePrefix("بازکن").trim()
+            q.startsWith("باز کن ") || q.startsWith("بازکن ") || q.startsWith("اجرا کن ") || q.startsWith("بیار بالا ") -> {
+                val name = q.replace(Regex("^(باز کن|بازکن|اجرا کن|بیار بالا)\\s*"), "").trim()
                 if (name.isBlank()) reply("نام برنامه را هم بگو") else launchAppByName(name)
             }
-            q.endsWith("را باز کن") || q.endsWith("رو باز کن") -> {
-                val name = q.removeSuffix("را باز کن").removeSuffix("رو باز کن").trim()
+            q.endsWith("را باز کن") || q.endsWith("رو باز کن") || q.endsWith("و باز کن") || q.endsWith("رو بیار بالا") || q.endsWith("و بیار بالا") -> {
+                val name = q.replace(Regex("(را باز کن|رو باز کن|و باز کن|رو بیار بالا|و بیار بالا)$"), "").trim()
                 if (name.isBlank()) reply("نام برنامه را هم بگو") else launchAppByName(name)
             }
-            else -> askCloud(raw)
+            aiEnabled() -> askCloud(raw)
+            else -> reply("این فرمان در حالت پایه پشتیبانی نمی‌شود. برای گفت‌وگوی آزاد، AI را از تنظیمات روشن و سرویس API را پیکربندی کن.")
         }
     }
 
@@ -394,7 +496,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val intent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = packageManager.queryIntentActivities(intent, 0).sortedBy { it.loadLabel(packageManager).toString() }
         val names = apps.map { it.loadLabel(packageManager).toString() }
-        addLog("CHT AI", if (names.isEmpty()) "برنامه‌ای پیدا نشد" else "برنامه‌های قابل اجرا:\n" + names.joinToString("\n"))
+        addLog("JARVIS", if (names.isEmpty()) "برنامه‌ای پیدا نشد" else "برنامه‌های قابل اجرا:\n" + names.joinToString("\n"))
         reply("فهرست ${names.size} برنامه را نمایش دادم")
     }
 
@@ -500,7 +602,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .setPositiveButton("پاک کن") { _, _ ->
                 while (conversation.length() > 0) conversation.remove(0)
                 prefs.edit().remove("conversation").apply()
-                log.text = "گفتگو پاک شد. من CHT AI هستم؛ چه کمکی از من برمی‌آید؟"
+                log.text = "گفتگو پاک شد. من JARVIS هستم؛ چه کمکی از من برمی‌آید؟"
                 reply("تاریخچه گفتگو پاک شد")
             }.setNegativeButton("لغو", null).show()
     }
@@ -541,7 +643,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     setRequestProperty("Authorization", "Bearer $key")
                 }
                 val messages = JSONArray().put(
-                    JSONObject().put("role", "system").put("content", "تو مغز هوشمند CHT AI هستی؛ دستیار فارسی‌زبان، دقیق و مسئولیت‌پذیر. زمینه پیام‌های قبلی را در نظر بگیر. اگر کاربر فقط سؤال دارد، پاسخ عادی فارسی بده. اگر درخواست او یکی از فرمان‌های محلی پشتیبانی‌شده است، فقط یک JSON بدون markdown با قالب {\"type\":\"action\",\"command\":\"فرمان فارسی کوتاه\"} برگردان. فرمان‌های مجاز: باز کردن برنامه با عبارت «[نام برنامه] را باز کن»، باز کردن وای‌فای، باز کردن تنظیمات بلوتوث، باز کردن تنظیمات عمومی یا باتری، تنظیم صدا با درصد، تنظیم روشنایی با درصد، روشن/خاموش کردن چراغ‌قوه، باز کردن پنل مزاحم نشو، نمایش برنامه‌ها. هیچ فرمان دیگری پیشنهاد نده. هرگز ادعا نکن کاری انجام شده است. برنامه پیش از اجرای فرمان از کاربر تأیید می‌گیرد. رمز، کد تأیید یا کلید API درخواست نکن.")
+                    JSONObject().put("role", "system").put("content", "تو مغز هوشمند JARVIS هستی؛ دستیار فارسی‌زبان، دقیق و مسئولیت‌پذیر. زمینه پیام‌های قبلی را در نظر بگیر. اگر کاربر فقط سؤال دارد، پاسخ عادی فارسی بده. اگر درخواست او یکی از فرمان‌های محلی پشتیبانی‌شده است، فقط یک JSON بدون markdown با قالب {\"type\":\"action\",\"command\":\"فرمان فارسی کوتاه\"} برگردان. فرمان‌های مجاز: باز کردن برنامه با عبارت «[نام برنامه] را باز کن»، باز کردن وای‌فای، باز کردن تنظیمات بلوتوث، باز کردن تنظیمات عمومی یا باتری، تنظیم صدا با درصد، تنظیم روشنایی با درصد، روشن/خاموش کردن چراغ‌قوه، باز کردن پنل مزاحم نشو، نمایش برنامه‌ها. هیچ فرمان دیگری پیشنهاد نده. هرگز ادعا نکن کاری انجام شده است. برنامه پیش از اجرای فرمان از کاربر تأیید می‌گیرد. رمز، کد تأیید یا کلید API درخواست نکن.")
                 )
                 for (i in 0 until conversation.length()) messages.put(conversation.getJSONObject(i))
                 messages.put(JSONObject().put("role", "user").put("content", prompt))
@@ -559,15 +661,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     if (action != null) {
                         val command = action.optString("command", "").trim()
                         if (isAllowedAiCommand(command)) {
-                            addLog("CHT AI", "برای اجرای این فرمان تأیید تو لازم است: $command")
+                            addLog("JARVIS", "برای اجرای این فرمان تأیید تو لازم است: $command")
                             addConversationMessage("assistant", "پیشنهاد اجرای فرمان: $command")
                             confirmAiAction(command)
                         } else {
                             val message = "این فرمان در فهرست عملیات امن و پشتیبانی‌شده نیست؛ اجرا نشد."
-                            addLog("CHT AI", message); addConversationMessage("assistant", message); speak(message)
+                            addLog("JARVIS", message); addConversationMessage("assistant", message); speak(message)
                         }
                     } else {
-                        addLog("CHT AI", answer)
+                        addLog("JARVIS", answer)
                         addConversationMessage("assistant", answer)
                         status.text = "پاسخ آماده شد"; speak(answer)
                     }
@@ -614,8 +716,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             .show()
     }
 
-    private fun reply(message: String) { status.text = message; addLog("CHT AI", message); speak(message) }
-    private fun speak(message: String) { if (ttsReady) tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "cht_reply") }
+    private fun reply(message: String) { status.text = message; addLog("JARVIS", message); speak(message) }
+    private fun speak(message: String) { if (ttsReady) tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "jarvis_reply") }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -648,4 +750,37 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (::tts.isInitialized) { tts.stop(); tts.shutdown() }
         super.onDestroy()
     }
+}
+
+
+/** Animated cyan holographic orb used as a live visual state indicator. */
+private class JarvisOrbView(context: Context) : View(context) {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private var phase = 0f
+    private val cyan = Color.rgb(44, 218, 244)
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        super.onDraw(canvas)
+        val cx = width / 2f; val cy = height / 2f
+        val radius = minOf(width * .29f, height * .43f)
+        phase += .035f
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = 1.4f
+        for (i in 0..3) {
+            val r = radius * (1.08f + i * .12f + kotlin.math.sin(phase + i) * .012f)
+            paint.color = Color.argb(90 - i * 15, 45, 205, 239)
+            canvas.drawCircle(cx, cy, r, paint)
+        }
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.shader = android.graphics.RadialGradient(cx - radius * .25f, cy - radius * .28f, radius * 1.35f,
+            intArrayOf(Color.rgb(207, 255, 255), cyan, Color.rgb(8, 65, 117), Color.rgb(3, 17, 42)),
+            floatArrayOf(0f, .22f, .68f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawCircle(cx, cy, radius * (1f + kotlin.math.sin(phase) * .012f), paint)
+        paint.shader = null
+        paint.style = android.graphics.Paint.Style.STROKE; paint.strokeWidth = 2f; paint.color = Color.argb(170, 104, 244, 255)
+        canvas.drawArc(cx-radius*.78f, cy-radius*.78f, cx+radius*.78f, cy+radius*.78f, phase*35f, 125f, false, paint)
+        paint.style = android.graphics.Paint.Style.FILL; paint.color = Color.WHITE; paint.textAlign = android.graphics.Paint.Align.CENTER; paint.textSize = 11f
+        canvas.drawText("J A R V I S", cx, cy + radius + dp(31), paint)
+        postInvalidateDelayed(40)
+    }
+    private fun dp(v: Int) = v * resources.displayMetrics.density
 }

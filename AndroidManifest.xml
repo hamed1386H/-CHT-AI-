@@ -18,7 +18,7 @@
     </queries>
     <application
         android:theme="@android:style/Theme.Material.NoActionBar"
-        android:label="CHT AI"
+        android:label="J.A.R.V.I.S ULTIMATE"
         android:usesCleartextTraffic="false"
         android:allowBackup="false">
         <service android:name=".WakeWordService" android:exported="false" android:foregroundServiceType="microphone" />

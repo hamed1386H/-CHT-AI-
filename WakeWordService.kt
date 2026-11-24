@@ -26,7 +26,7 @@ class WakeWordService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(notificationId, buildNotification("در حال گوش‌به‌زنگ؛ بگو سلام CHT"))
+        startForeground(notificationId, buildNotification("در حال گوش‌به‌زنگ؛ بگو سلام هوش"))
         try {
             val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
             wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "CHTAI:WakeWord")
@@ -38,7 +38,7 @@ class WakeWordService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(channelId, "گوش‌به‌زنگ CHT AI", NotificationManager.IMPORTANCE_LOW).apply {
+            val channel = NotificationChannel(channelId, "گوش‌به‌زنگ JARVIS", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "اعلان دائمی برای سرویس تشخیص عبارت بیدارباش"
             }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -54,7 +54,7 @@ class WakeWordService : Service() {
         val stopPending = PendingIntent.getService(this, 7703, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("CHT AI فعال است")
+            .setContentTitle("JARVIS فعال است")
             .setContentText(message)
             .setContentIntent(pending)
             .setOngoing(true)
@@ -87,12 +87,12 @@ class WakeWordService : Service() {
                     listening = false
                     val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                     val normalized = heard.lowercase(Locale.ROOT).replace("ي", "ی").replace("ك", "ک")
-                    val wakeFound = listOf("سلام cht", "سلام چت", "سلام سی اچ تی", "سلام سی اچ تی آی").any { normalized.contains(it) }
+                    val wakeFound = listOf("سلام هوش", "سلام هوش مصنوعی", "سلام جارویس", "سلام jarvis", "سلام cht").any { normalized.contains(it) }
                     if (wakeFound) {
-                        updateNotification("عبارت سلام CHT شنیده شد؛ برای گفتن فرمان، اعلان را لمس کن")
+                        updateNotification("عبارت بیدارباش شنیده شد؛ برای گفتن فرمان، اعلان را لمس کن")
                         // Android restricts background activity launches. The user opens the app from this notification.
                     } else {
-                        updateNotification("در حال گوش‌به‌زنگ؛ بگو سلام CHT")
+                        updateNotification("در حال گوش‌به‌زنگ؛ بگو سلام هوش")
                     }
                     scheduleRecognitionRestart(1000)
                 }
