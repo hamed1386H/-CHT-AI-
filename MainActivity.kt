@@ -883,63 +883,63 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun aiSettings() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 4) }
-        val model = EditText(this).apply {
-            hint = "مدل Gemini؛ پیش‌فرض gemini-2.5-flash"
-            setText(prefs.getString("model", "gemini-2.5-flash")); textSize = 14f
-        }
         val key = EditText(this).apply {
-            hint = "کلید API جمنای (محرمانه)"
+            hint = "کلید API رایگان OpenRouter"
             setText(prefs.getString("key", "")); inputType = 129
         }
-        box.addView(model); box.addView(key)
-        AlertDialog.Builder(this).setTitle("اتصال رایگان Gemini")
-            .setMessage("موتور گفت‌وگوی JARVIS با Gemini API گوگل کار می‌کند. در Google AI Studio کلید API بساز و اینجا وارد کن. استفاده رایگان در صورت فعال بودن سهمیه حساب ممکن است؛ محدودیت‌ها و هزینه‌های احتمالی تابع شرایط گوگل است. کلید را با کسی به اشتراک نگذار.")
+        box.addView(key)
+        AlertDialog.Builder(this).setTitle("هوش مصنوعی رایگان")
+            .setMessage("اتصال به OpenRouter با مسیریاب مدل‌های رایگان (openrouter/free). یک کلید رایگان از openrouter.ai بساز و اینجا وارد کن. مدل‌های رایگان محدودیت تعداد درخواست دارند و ممکن است مدل انتخاب‌شده با توجه به ظرفیت سرویس تغییر کند. برای این حالت نیازی به خرید اعتبار نیست؛ مراقب باش مدل پولی انتخاب نکنی.")
             .setView(box).setPositiveButton("ذخیره") { _, _ ->
-                prefs.edit().putString("provider", "gemini").putString("model", model.text.toString().trim().ifBlank { "gemini-2.5-flash" }).putString("key", key.text.toString().trim()).apply()
-                reply("تنظیمات Gemini ذخیره شد. حالا می‌توانی پیام بدهی.")
+                prefs.edit().putString("provider", "openrouter").putString("model", "openrouter/free").putString("key", key.text.toString().trim()).apply()
+                reply("تنظیمات هوش مصنوعی رایگان ذخیره شد. برای شروع گفتگو پیام بده.")
             }.setNegativeButton("لغو", null).show()
     }
 
     private fun askCloud(prompt: String) {
         val key = prefs.getString("key", "").orEmpty()
-        val model = prefs.getString("model", "gemini-2.5-flash").orEmpty().ifBlank { "gemini-2.5-flash" }
+        val model = "openrouter/free"
         if (key.isBlank()) {
-            reply("برای اتصال Gemini، در تنظیمات هوش کلید API جمنای را وارد کن. کلید را از aistudio.google.com بگیر.")
+            reply("برای فعال‌سازی هوش مصنوعی رایگان، در تنظیمات هوش یک کلید OpenRouter وارد کن. ساخت کلید رایگان است؛ مدل‌های رایگان محدودیت روزانه دارند.")
             return
         }
-        status.text = "در حال دریافت پاسخ از هوش ابری…"
+        status.text = "در حال دریافت پاسخ از هوش مصنوعی…"
         executor.execute {
             var connection: HttpURLConnection? = null
             try {
-                val safeModel = model.replace(Regex("[^A-Za-z0-9._-]"), "")
-                if (safeModel.isBlank()) throw Exception("نام مدل Gemini معتبر نیست")
-                val geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$safeModel:generateContent?key=${Uri.encode(key)}"
-                connection = (URL(geminiUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"; connectTimeout = 20000; readTimeout = 60000
-                    doOutput = true; setRequestProperty("Content-Type", "application/json")
+                connection = (URL("https://openrouter.ai/api/v1/chat/completions").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 20000; readTimeout = 90000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Authorization", "Bearer $key")
+                    setRequestProperty("X-Title", "JARVIS ULTIMATE")
                 }
                 val instruction = "تو JARVIS هستی؛ دستیار فارسی‌زبان، صمیمی، دقیق و مسئولیت‌پذیر. طبیعی و مانند یک دستیار گفت‌وگومحور صحبت کن و همیشه فارسی پاسخ بده مگر کاربر زبان دیگری بخواهد. زمینه پیام‌های قبلی را در نظر بگیر. اگر کاربر درخواست اجرای یکی از فرمان‌های محلی پشتیبانی‌شده را دارد، فقط JSON بدون markdown با قالب {\"type\":\"action\",\"command\":\"فرمان فارسی کوتاه\"} برگردان. فرمان‌های مجاز: باز کردن برنامه با عبارت «[نام برنامه] را باز کن»، باز کردن وای‌فای، باز کردن تنظیمات بلوتوث، باز کردن تنظیمات عمومی یا باتری، تنظیم صدا با درصد، تنظیم روشنایی با درصد، روشن/خاموش کردن چراغ‌قوه، باز کردن پنل مزاحم نشو، نمایش برنامه‌ها. هیچ فرمان دیگری پیشنهاد نده. هرگز ادعا نکن کاری انجام شده است. برنامه پیش از اجرای فرمان از کاربر تأیید می‌گیرد. رمز، کد تأیید یا کلید API درخواست نکن."
-                val contents = JSONArray()
+                val messages = JSONArray()
+                messages.put(JSONObject().put("role", "system").put("content", instruction))
                 for (i in 0 until conversation.length()) {
                     val item = conversation.getJSONObject(i)
-                    val role = if (item.optString("role") == "assistant") "model" else "user"
-                    contents.put(JSONObject().put("role", role).put("parts", JSONArray().put(JSONObject().put("text", item.optString("content")))))
+                    val role = if (item.optString("role") == "assistant") "assistant" else "user"
+                    messages.put(JSONObject().put("role", role).put("content", item.optString("content")))
                 }
-                contents.put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt))))
+                messages.put(JSONObject().put("role", "user").put("content", prompt))
                 val body = JSONObject()
-                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instruction))))
-                    .put("contents", contents)
-                    .put("generationConfig", JSONObject().put("temperature", 0.65).put("maxOutputTokens", 1200))
+                    .put("model", model)
+                    .put("messages", messages)
+                    .put("max_tokens", 1200)
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
-                if (code !in 200..299) throw Exception("خطای سرویس ($code): ${response.take(500)}")
+                if (code !in 200..299) {
+                    val detail = try { JSONObject(response).optJSONObject("error")?.optString("message") ?: response } catch (_: Exception) { response }
+                    throw Exception("خطای OpenRouter ($code): ${detail.take(400)}")
+                }
                 val result = JSONObject(response)
-                val candidate = result.getJSONArray("candidates").getJSONObject(0)
-                val parts = candidate.getJSONObject("content").getJSONArray("parts")
-                val answer = (0 until parts.length()).mapNotNull { idx -> parts.getJSONObject(idx).optString("text").takeIf { it.isNotBlank() } }.joinToString("\n").trim()
-                if (answer.isBlank()) throw Exception("Gemini پاسخ متنی برنگرداند")
+                val choices = result.optJSONArray("choices") ?: JSONArray()
+                val message = choices.optJSONObject(0)?.optJSONObject("message")
+                val answer = message?.optString("content", "")?.trim().orEmpty()
+                if (answer.isBlank()) throw Exception("مدل رایگان پاسخ متنی برنگرداند؛ ممکن است موقتاً ظرفیت نداشته باشد.")
                 runOnUiThread {
                     addLog("شما", prompt)
                     addConversationMessage("user", prompt)
@@ -961,11 +961,10 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                     }
                 }
             } catch (e: Exception) {
-                runOnUiThread { reply("اتصال به هوش ابری ناموفق بود: ${e.message ?: "خطای ناشناخته"}") }
+                runOnUiThread { reply("اتصال به هوش مصنوعی ناموفق بود: ${e.message ?: "خطای ناشناخته"}") }
             } finally { connection?.disconnect() }
         }
     }
-
 
     private fun parseAiAction(raw: String): JSONObject? {
         return try {
